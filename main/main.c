@@ -33,8 +33,13 @@ void app_main(void)
     if (!esp_psram_is_initialized()) {
         ESP_LOGE(TAG, "No PSRAM available on ESP32 device!");
         GLOBAL_STATE.psram_is_available = false;
+        ESP_LOGW(TAG, "******************************************");
+        ESP_LOGW(TAG, "***   LOW MEMORY MODE ACTIVE          ***");
+        ESP_LOGW(TAG, "***   Some features will be disabled  ***");
+        ESP_LOGW(TAG, "******************************************");
     } else {
         GLOBAL_STATE.psram_is_available = true;
+        ESP_LOGI(TAG, "PSRAM detected and initialized");
     }
 
     // Init I2C
@@ -81,11 +86,15 @@ void app_main(void)
     //start the API for AxeOS
     start_rest_server((void *) &GLOBAL_STATE);
 
-    // Initialize BAP interface
-    esp_err_t bap_ret = BAP_init(&GLOBAL_STATE);
-    if (bap_ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize BAP interface: %d", bap_ret);
-        // Continue anyway, as BAP is not critical for core functionality
+    // Initialize BAP interface (only if PSRAM available)
+    if (GLOBAL_STATE.psram_is_available) {
+        esp_err_t bap_ret = BAP_init(&GLOBAL_STATE);
+        if (bap_ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to initialize BAP interface: %d", bap_ret);
+            // Continue anyway, as BAP is not critical for core functionality
+        }
+    } else {
+        ESP_LOGI(TAG, "Skipping BAP init - low memory mode");
     }
 
     while (!GLOBAL_STATE.SYSTEM_MODULE.is_connected) {
@@ -111,10 +120,17 @@ void app_main(void)
     if (xTaskCreate(ASIC_result_task, "asic result", 8192, (void *) &GLOBAL_STATE, 15, NULL) != pdPASS) {
         ESP_LOGE(TAG, "Error creating asic result task");
     }
-    if (xTaskCreateWithCaps(hashrate_monitor_task, "hashrate monitor", 8192, (void *) &GLOBAL_STATE, 5, NULL, MALLOC_CAP_SPIRAM) != pdPASS) {
-        ESP_LOGE(TAG, "Error creating hashrate monitor task");
-    }
-    if (xTaskCreateWithCaps(statistics_task, "statistics", 8192, (void *) &GLOBAL_STATE, 3, NULL, MALLOC_CAP_SPIRAM) != pdPASS) {
-        ESP_LOGE(TAG, "Error creating statistics task");
+
+    // Only create PSRAM-dependent tasks if PSRAM is available
+    if (GLOBAL_STATE.psram_is_available) {
+        if (xTaskCreateWithCaps(hashrate_monitor_task, "hashrate monitor", 8192, (void *) &GLOBAL_STATE, 5, NULL, MALLOC_CAP_SPIRAM) != pdPASS) {
+            ESP_LOGE(TAG, "Error creating hashrate monitor task");
+        }
+        if (xTaskCreateWithCaps(statistics_task, "statistics", 8192, (void *) &GLOBAL_STATE, 3, NULL, MALLOC_CAP_SPIRAM) != pdPASS) {
+            ESP_LOGE(TAG, "Error creating statistics task");
+        }
+    } else {
+        ESP_LOGW(TAG, "Skipping statistics and hashrate monitor tasks - low memory mode");
+        ESP_LOGW(TAG, "Mining will continue normally, web UI accessible");
     }
 }
