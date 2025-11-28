@@ -21,8 +21,16 @@ void ASIC_task(void *pvParameters)
     //initialize the semaphore
     GLOBAL_STATE->ASIC_TASK_MODULE.semaphore = xSemaphoreCreateBinary();
 
-    GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs = heap_caps_malloc(sizeof(bm_job *) * 128, MALLOC_CAP_SPIRAM);
-    GLOBAL_STATE->valid_jobs = heap_caps_malloc(sizeof(uint8_t) * 128, MALLOC_CAP_SPIRAM);
+    // Allocate from SPIRAM if available, otherwise use regular heap
+    if (GLOBAL_STATE->psram_is_available) {
+        GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs = heap_caps_malloc(sizeof(bm_job *) * 128, MALLOC_CAP_SPIRAM);
+        GLOBAL_STATE->valid_jobs = heap_caps_malloc(sizeof(uint8_t) * 128, MALLOC_CAP_SPIRAM);
+        ESP_LOGI(TAG, "Using SPIRAM for ASIC job buffers");
+    } else {
+        GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs = malloc(sizeof(bm_job *) * 128);
+        GLOBAL_STATE->valid_jobs = malloc(sizeof(uint8_t) * 128);
+        ESP_LOGW(TAG, "Using internal RAM for ASIC job buffers (low memory mode)");
+    }
     for (int i = 0; i < 128; i++)
     {
         GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[i] = NULL;

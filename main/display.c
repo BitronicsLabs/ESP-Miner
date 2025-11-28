@@ -93,7 +93,13 @@ esp_err_t display_init(void * pvParameters)
 
     lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
 
-    lvgl_cfg.task_stack_caps = MALLOC_CAP_SPIRAM;
+    // Use SPIRAM for LVGL task stack if available, otherwise use internal RAM
+    if (GLOBAL_STATE->psram_is_available) {
+        lvgl_cfg.task_stack_caps = MALLOC_CAP_SPIRAM;
+    } else {
+        lvgl_cfg.task_stack_caps = MALLOC_CAP_INTERNAL;
+        ESP_LOGW(TAG, "LVGL using internal RAM (low memory mode)");
+    }
 
     if (GLOBAL_STATE->DISPLAY_CONFIG.display == NONE) {
         ESP_LOGI(TAG, "Initialize LVGL");
