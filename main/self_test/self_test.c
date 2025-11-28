@@ -262,10 +262,18 @@ bool self_test(void * pvParameters)
         return true;
     }
 
-    //Run PSRAM test
+    //Run PSRAM test (skip in low memory mode)
     if(test_psram(GLOBAL_STATE) != ESP_OK) {
-        ESP_LOGE(TAG, "NO PSRAM on device!");
-        tests_done(GLOBAL_STATE, false);
+        if (GLOBAL_STATE->psram_is_available) {
+            // PSRAM was expected but failed
+            ESP_LOGE(TAG, "PSRAM initialization failed!");
+            tests_done(GLOBAL_STATE, false);
+        } else {
+            // No PSRAM detected - allow low memory mode
+            ESP_LOGW(TAG, "NO PSRAM on device - continuing in LOW MEMORY MODE");
+            display_msg("PSRAM:NONE", GLOBAL_STATE);
+            vTaskDelay(1000 / portTICK_PERIOD_MS); // Show message
+        }
     }
 
     //Run display tests
