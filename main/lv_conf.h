@@ -73,6 +73,7 @@
 #define LV_BUILD_DEMOS    0
 
 #define LV_MEM_POOL_INCLUDE     "esp_heap_caps.h"
-#define LV_MEM_POOL_ALLOC(size) heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA)
+// Try SPIRAM first, fallback to internal RAM if not available (low memory mode)
+#define LV_MEM_POOL_ALLOC(size) heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)
 
 #endif /* LV_CONF_H */
