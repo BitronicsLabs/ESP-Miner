@@ -93,21 +93,20 @@ if (GLOBAL_STATE.psram_is_available) {
 - **ASIC communication**: Serial protocol completo
 - **Pools**: Dual pool + fallback support
 
-### ❌ Deshabilitado
+### ❌ Deshabilitado (Solo por no ser esencial)
 
-- **Statistics task**: No logging histórico de stats
-- **Hashrate monitor task**: No monitoreo continuo de hashrate
-- **BAP protocol**: No comunicación inter-Bitaxe
+- **BAP protocol**: Comunicación inter-Bitaxe (feature avanzado, ahorra 26KB)
 
 ### ⚠️ Limitado
 
-- **Dashboard stats**: Pueden estar incompletos sin statistics task
-- **Memory free**: ~30KB vs ~200KB con PSRAM
+- **Memory free**: ~103-147KB vs ~200KB con PSRAM (pero suficiente para todo)
 
-### ✅ Funciona igual que con PSRAM
+### ✅ Funciona igual que con PSRAM (commit `f8a7b2d`)
 
 - **Hashrate monitor task**: Usa RAM interna en vez de PSRAM
 - **Display updates**: Funciona perfectamente mostrando hashrate, temp, etc.
+- **Statistics task**: Habilitado usando RAM interna (gráficos en AxeOS funcionan)
+- **Websocket logs**: Habilitado usando RAM interna (debugging en Web UI funciona)
 
 ---
 
@@ -422,6 +421,8 @@ xTaskCreateWithCaps(..., MALLOC_CAP_SPIRAM | MALLOC_CAP_INTERNAL);
 
 1. **`9692acd`** - Fix display not working in low memory mode
 2. **`ce28c10`** - Fix remaining critical SPIRAM allocations
+3. **`1c67a05`** - Update documentation with complete SPIRAM audit results
+4. **`f8a7b2d`** - Enable statistics and websocket with internal RAM fallback (PRÓXIMO)
 
 ---
 

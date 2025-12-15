@@ -30,9 +30,15 @@ void createStatisticsBuffer()
         pthread_mutex_lock(&statisticsDataLock);
 
         if (NULL == statisticsBuffer) {
-            statisticsBuffer = (StatisticsDataPtr)heap_caps_malloc(sizeof(struct StatisticsData) * maxDataCount, MALLOC_CAP_SPIRAM);
+            // Try SPIRAM first, fallback to internal RAM (low memory mode)
+            statisticsBuffer = (StatisticsDataPtr)heap_caps_malloc(sizeof(struct StatisticsData) * maxDataCount, MALLOC_CAP_SPIRAM | MALLOC_CAP_INTERNAL);
             if (NULL == statisticsBuffer) {
-                ESP_LOGW(TAG, "Not enough memory for the statistics data buffer!");
+                ESP_LOGE(TAG, "Failed to allocate statistics buffer!");
+            } else {
+                // Check which memory type was used
+                if (heap_caps_get_allocated_size(statisticsBuffer) && !esp_ptr_external_ram(statisticsBuffer)) {
+                    ESP_LOGW(TAG, "Statistics buffer using internal RAM (low memory mode)");
+                }
             }
         }
 

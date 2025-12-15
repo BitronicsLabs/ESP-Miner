@@ -1359,11 +1359,12 @@ esp_err_t start_rest_server(void * pvParameters)
 
     httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, http_404_error_handler);
 
-    // Start websocket log handler thread (only if PSRAM available)
-    if (GLOBAL_STATE->psram_is_available) {
-        xTaskCreateWithCaps(websocket_task, "websocket_task", 8192, server, 2, NULL, MALLOC_CAP_SPIRAM);
+    // Start websocket log handler thread (use internal RAM fallback if needed)
+    uint32_t ws_mem_caps = GLOBAL_STATE->psram_is_available ? MALLOC_CAP_SPIRAM : MALLOC_CAP_INTERNAL;
+    if (xTaskCreateWithCaps(websocket_task, "websocket_task", 8192, server, 2, NULL, ws_mem_caps) != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create websocket task");
     } else {
-        ESP_LOGW(TAG, "Websocket logs disabled (low memory mode)");
+        ESP_LOGI(TAG, "Websocket logs enabled (using %s)", GLOBAL_STATE->psram_is_available ? "PSRAM" : "internal RAM");
     }
 
     // Start the DNS server that will redirect all queries to the softAP IP
