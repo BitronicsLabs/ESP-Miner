@@ -121,16 +121,19 @@ void app_main(void)
         ESP_LOGE(TAG, "Error creating asic result task");
     }
 
-    // Only create PSRAM-dependent tasks if PSRAM is available
+    // Create hashrate monitor task (critical for display) - use appropriate memory
+    uint32_t task_mem_caps = GLOBAL_STATE.psram_is_available ? MALLOC_CAP_SPIRAM : MALLOC_CAP_INTERNAL;
+    if (xTaskCreateWithCaps(hashrate_monitor_task, "hashrate monitor", 8192, (void *) &GLOBAL_STATE, 5, NULL, task_mem_caps) != pdPASS) {
+        ESP_LOGE(TAG, "Error creating hashrate monitor task");
+    }
+
+    // Only create statistics task if PSRAM is available (not critical for basic operation)
     if (GLOBAL_STATE.psram_is_available) {
-        if (xTaskCreateWithCaps(hashrate_monitor_task, "hashrate monitor", 8192, (void *) &GLOBAL_STATE, 5, NULL, MALLOC_CAP_SPIRAM) != pdPASS) {
-            ESP_LOGE(TAG, "Error creating hashrate monitor task");
-        }
         if (xTaskCreateWithCaps(statistics_task, "statistics", 8192, (void *) &GLOBAL_STATE, 3, NULL, MALLOC_CAP_SPIRAM) != pdPASS) {
             ESP_LOGE(TAG, "Error creating statistics task");
         }
     } else {
-        ESP_LOGW(TAG, "Skipping statistics and hashrate monitor tasks - low memory mode");
-        ESP_LOGW(TAG, "Mining will continue normally, web UI accessible");
+        ESP_LOGW(TAG, "Skipping statistics task - low memory mode");
+        ESP_LOGW(TAG, "Hashrate monitor active, display will work normally");
     }
 }

@@ -101,8 +101,12 @@ if (GLOBAL_STATE.psram_is_available) {
 ### ⚠️ Limitado
 
 - **Dashboard stats**: Pueden estar incompletos sin statistics task
-- **Hashrate display**: Se calcula de shares aceptados en vez de monitor task
 - **Memory free**: ~30KB vs ~200KB con PSRAM
+
+### ✅ Funciona igual que con PSRAM
+
+- **Hashrate monitor task**: Usa RAM interna en vez de PSRAM
+- **Display updates**: Funciona perfectamente mostrando hashrate, temp, etc.
 
 ---
 

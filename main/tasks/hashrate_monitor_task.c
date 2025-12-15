@@ -74,15 +74,18 @@ void hashrate_monitor_task(void *pvParameters)
     int asic_count = GLOBAL_STATE->DEVICE_CONFIG.family.asic_count;
     int hash_domains = GLOBAL_STATE->DEVICE_CONFIG.family.asic.hash_domains;
 
-    HASHRATE_MONITOR_MODULE->total_measurement = heap_caps_malloc(asic_count * sizeof(measurement_t), MALLOC_CAP_SPIRAM);
+    // Use PSRAM if available, otherwise use internal RAM (low memory mode)
+    uint32_t mem_caps = GLOBAL_STATE->psram_is_available ? MALLOC_CAP_SPIRAM : MALLOC_CAP_INTERNAL;
+
+    HASHRATE_MONITOR_MODULE->total_measurement = heap_caps_malloc(asic_count * sizeof(measurement_t), mem_caps);
     if (hash_domains > 0) {
-        measurement_t* data = heap_caps_malloc(asic_count * hash_domains * sizeof(measurement_t), MALLOC_CAP_SPIRAM);
-        HASHRATE_MONITOR_MODULE->domain_measurements = heap_caps_malloc(asic_count * sizeof(measurement_t*), MALLOC_CAP_SPIRAM);
+        measurement_t* data = heap_caps_malloc(asic_count * hash_domains * sizeof(measurement_t), mem_caps);
+        HASHRATE_MONITOR_MODULE->domain_measurements = heap_caps_malloc(asic_count * sizeof(measurement_t*), mem_caps);
         for (size_t asic_nr = 0; asic_nr < asic_count; asic_nr++) {
             HASHRATE_MONITOR_MODULE->domain_measurements[asic_nr] = data + (asic_nr * hash_domains);
         }
     }
-    HASHRATE_MONITOR_MODULE->error_measurement = heap_caps_malloc(asic_count * sizeof(measurement_t), MALLOC_CAP_SPIRAM);
+    HASHRATE_MONITOR_MODULE->error_measurement = heap_caps_malloc(asic_count * sizeof(measurement_t), mem_caps);
 
     clear_measurements(GLOBAL_STATE);
 
