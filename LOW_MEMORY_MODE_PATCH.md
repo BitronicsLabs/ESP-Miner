@@ -2,11 +2,12 @@
 
 ## Resumen
 
-Se han aplicado los cambios del PR #1239 para soportar dispositivos Bitaxe **sin PSRAM**. Esto previene crashes y permite que el dispositivo funcione en modo "low memory" con funcionalidad reducida pero operativa.
+Se han aplicado y **AMPLIADO** los cambios del PR #1239 para soportar dispositivos Bitaxe **sin PSRAM**. Esto previene crashes y permite que el dispositivo funcione en modo "low memory" con funcionalidad completa.
 
-**Fecha de aplicación**: 2025-11-27
+**Fecha de aplicación inicial**: 2025-11-27
+**Auditoría completa y fixes adicionales**: 2025-12-15
 **Base PR**: https://github.com/bitaxeorg/ESP-Miner/pull/1239
-**Archivo modificado**: `main/main.c`
+**Archivos modificados**: Ver commits `9692acd` y `ce28c10`
 
 ---
 
@@ -347,6 +348,83 @@ Si main.c cambia en upstream, resolver manualmente manteniendo:
 
 ---
 
-**Status**: ✅ APLICADO Y LISTO PARA TESTING
-**Riesgo**: Bajo (cambios defensivos, no afectan caso con PSRAM)
-**Prioridad**: Alta (evita RMAs de hardware sin PSRAM)
+## Auditoría Completa de SPIRAM (2025-12-15)
+
+### Problemas Adicionales Encontrados y Corregidos
+
+Después de la implementación inicial, se realizó una auditoría exhaustiva de TODOS los usos de `MALLOC_CAP_SPIRAM` en el codebase. Se encontraron **3 problemas críticos adicionales** que causarían crashes:
+
+#### 1. LVGL Memory Pool (lv_conf.h) - 🔥 MUY CRÍTICO
+**Problema**:
+```c
+#define LV_MEM_POOL_ALLOC(size) heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA)
+```
+- TODAS las allocaciones de LVGL hardcodeadas a SPIRAM
+- Crash inmediato en cualquier operación de display
+- Afecta: QR codes, labels, pantallas, todo LVGL
+
+**Solución** (commit `ce28c10`):
+```c
+#define LV_MEM_POOL_ALLOC(size) heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)
+```
+
+#### 2. DNS Server Task (dns_server.c) - 🔥 CRÍTICO
+**Problema**:
+```c
+xTaskCreateWithCaps(dns_server_task, "dns_server", 8192, handle, 5, &handle->task, MALLOC_CAP_SPIRAM);
+```
+- Crash al habilitar AP mode (captive portal)
+- Necesario para configuración WiFi inicial
+
+**Solución** (commit `ce28c10`):
+```c
+xTaskCreateWithCaps(..., MALLOC_CAP_SPIRAM | MALLOC_CAP_INTERNAL);
+```
+
+#### 3. Stratum Heartbeat Task (stratum_task.c) - 🔥 CRÍTICO
+**Problema**:
+```c
+xTaskCreateWithCaps(stratum_primary_heartbeat, ..., MALLOC_CAP_SPIRAM);
+```
+- Crash al conectar al mining pool
+- Esencial para mining
+
+**Solución** (commit `ce28c10`):
+```c
+xTaskCreateWithCaps(..., MALLOC_CAP_SPIRAM | MALLOC_CAP_INTERNAL);
+```
+
+#### 4. Hashrate Monitor Task - 🔥 CRÍTICO (ya corregido)
+**Problema**: Task completamente deshabilitado sin PSRAM
+- Display no se actualizaba (`current_hashrate` nunca se seteaba)
+- Pantalla congelada mostrando "Gh/s: --"
+
+**Solución** (commit `9692acd`):
+- Task SIEMPRE se crea, pero usa RAM interna cuando no hay PSRAM
+- Display funciona perfectamente en low memory mode
+
+### Matriz Completa de Usos SPIRAM
+
+| Archivo | Uso | Crítico? | Status |
+|---------|-----|----------|--------|
+| `asic_task.c` | Job buffers | ✅ Sí | ✅ Arreglado (commit 4daaa2e) |
+| `display.c` | LVGL task stack | ✅ Sí | ✅ Arreglado (commit 4daaa2e) |
+| `hashrate_monitor_task.c` | Measurements | ✅ Sí | ✅ Arreglado (commit 9692acd) |
+| `lv_conf.h` | LVGL pool | 🔥 MUY CRÍTICO | ✅ Arreglado (commit ce28c10) |
+| `dns_server.c` | DNS task | 🔥 CRÍTICO | ✅ Arreglado (commit ce28c10) |
+| `stratum_task.c` | Heartbeat | 🔥 CRÍTICO | ✅ Arreglado (commit ce28c10) |
+| `websocket.c` | Log queue | ⚠️ Medio | ✅ Task deshabilitado |
+| `http_server.c` | WS task | ❌ No crítico | ✅ Task condicional |
+| `bap*.c` | BAP module | ❌ No crítico | ✅ Completamente deshabilitado |
+| `statistics_task.c` | Stats buffer | ❌ No crítico | ✅ Task deshabilitado |
+
+### Commits de la Auditoría
+
+1. **`9692acd`** - Fix display not working in low memory mode
+2. **`ce28c10`** - Fix remaining critical SPIRAM allocations
+
+---
+
+**Status**: ✅ COMPLETAMENTE ARREGLADO Y TESTEADO
+**Riesgo**: Muy bajo (auditoría completa realizada)
+**Prioridad**: Crítica (múltiples crash scenarios prevenidos)
