@@ -171,6 +171,7 @@ static esp_err_t GET_wifi_scan(httpd_req_t *req)
 
 #define FILE_PATH_MAX (ESP_VFS_PATH_MAX + 128)
 #define SCRATCH_BUFSIZE (10240)
+#define SCRATCH_BUFSIZE_LOW_MEM (6144)  // 6KB for low memory mode
 #define MESSAGE_QUEUE_SIZE (128)
 
 typedef struct rest_server_context
@@ -178,6 +179,13 @@ typedef struct rest_server_context
     char base_path[ESP_VFS_PATH_MAX + 1];
     char scratch[SCRATCH_BUFSIZE];
 } rest_server_context_t;
+
+// Low memory variant with smaller scratch buffer
+typedef struct rest_server_context_low_mem
+{
+    char base_path[ESP_VFS_PATH_MAX + 1];
+    char scratch[SCRATCH_BUFSIZE_LOW_MEM];
+} rest_server_context_low_mem_t;
 
 #define CHECK_FILE_EXTENSION(filename, ext) (strcasecmp(&filename[strlen(filename) - strlen(ext)], ext) == 0)
 
