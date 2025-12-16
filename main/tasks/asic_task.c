@@ -31,6 +31,17 @@ void ASIC_task(void *pvParameters)
         GLOBAL_STATE->valid_jobs = malloc(sizeof(uint8_t) * 128);
         ESP_LOGW(TAG, "Using internal RAM for ASIC job buffers (low memory mode)");
     }
+
+    // Critical: verify allocation succeeded
+    if (GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs == NULL || GLOBAL_STATE->valid_jobs == NULL) {
+        ESP_LOGE(TAG, "CRITICAL: Failed to allocate ASIC job buffers! Free heap: %lu bytes", esp_get_free_heap_size());
+        ESP_LOGE(TAG, "active_jobs: %p, valid_jobs: %p",
+            GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs,
+            GLOBAL_STATE->valid_jobs);
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
+        esp_restart();
+    }
+
     for (int i = 0; i < 128; i++)
     {
         GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[i] = NULL;
