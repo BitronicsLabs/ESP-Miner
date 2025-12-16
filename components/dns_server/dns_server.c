@@ -288,8 +288,9 @@ dns_server_handle_t start_dns_server(dns_server_config_t * config)
     handle->num_of_entries = config->num_of_entries;
     memcpy(handle->entry, config->item, config->num_of_entries * sizeof(dns_entry_pair_t));
 
-    // Use SPIRAM if available, fallback to internal RAM (low memory mode)
-    BaseType_t ret = xTaskCreateWithCaps(dns_server_task, "dns_server", 8192, handle, 5, &handle->task, MALLOC_CAP_SPIRAM | MALLOC_CAP_INTERNAL);
+    // Always use internal RAM for DNS server (critical for captive portal)
+    // SPIRAM | INTERNAL flags don't work reliably on devices without PSRAM
+    BaseType_t ret = xTaskCreate(dns_server_task, "dns_server", 8192, handle, 5, &handle->task);
     if (ret != pdPASS) {
         ESP_LOGE(TAG, "Failed to create DNS server task - captive portal will not work!");
         free(handle);
