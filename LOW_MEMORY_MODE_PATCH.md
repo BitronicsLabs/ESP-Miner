@@ -455,6 +455,25 @@ xTaskCreate(stratum_primary_heartbeat, ...);  // Internal RAM
 - Web UI funciona perfectamente
 - HTTP requests se procesan correctamente
 
+#### 9. Statistics Buffer Allocation - 🔥 CRÍTICO (System Crash)
+**Problema**: `heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_INTERNAL)`
+- El patrón SPIRAM|INTERNAL **NO hace fallback automático**
+- Retorna NULL en dispositivos sin PSRAM
+- Causa crash: "Error: Failed to allocate memory for buffer"
+- Sistema reinicia continuamente
+- Statistics buffer = 720 entries × ~52 bytes = **37KB**
+
+**Solución** (commit `1eea0e6`):
+```c
+// Conditional memory selection
+bool psram_available = esp_psram_is_initialized();
+uint32_t mem_caps = psram_available ? MALLOC_CAP_SPIRAM : MALLOC_CAP_INTERNAL;
+statisticsBuffer = heap_caps_malloc(sizeof(struct StatisticsData) * maxDataCount, mem_caps);
+```
+- Buffer se alloca correctamente en internal RAM cuando no hay PSRAM
+- Sistema estable, no más crashes
+- Statistics graphs funcionan en AxeOS
+
 ### Matriz Completa de Usos SPIRAM
 
 | Archivo | Uso | Crítico? | Status |
@@ -467,7 +486,7 @@ xTaskCreate(stratum_primary_heartbeat, ...);  // Internal RAM
 | `stratum_task.c` | Heartbeat | 🔥 CRÍTICO | ✅ Arreglado (commit 93213e0) |
 | `websocket.c` | Log queue | ✅ Habilitado | ✅ Arreglado (commit 143e508) |
 | `http_server.c` | WS task | ✅ Habilitado | ✅ Condicional (commit 143e508) |
-| `statistics_task.c` | Stats buffer | ✅ Habilitado | ✅ Fallback (commit 143e508) |
+| `statistics_task.c` | Stats buffer (37KB) | 🔥 CRÍTICO | ✅ Arreglado (commit 1eea0e6) |
 | `sdkconfig.defaults` | WiFi/LWIP bufs | 🔥 MUY CRÍTICO | ✅ Arreglado (commit 2c87e9a) |
 | `bap*.c` | BAP module | ❌ No crítico | ✅ Completamente deshabilitado |
 
@@ -483,6 +502,8 @@ xTaskCreate(stratum_primary_heartbeat, ...);  // Internal RAM
 8. **`93213e0`** - Fix stratum heartbeat task creation
 9. **`eeecb76`** - Update LOW_MEMORY_MODE_PATCH.md with all fixes and lessons learned
 10. **`2c87e9a`** - 🔥 **CRÍTICO**: Disable WiFi/LWIP SPIRAM allocation to fix web UI
+11. **`1ca7b7f`** - docs: Add WiFi/LWIP SPIRAM allocation fix to documentation
+12. **`1eea0e6`** - 🔥 **CRÍTICO**: Fix statistics buffer allocation crash
 
 ---
 
@@ -506,8 +527,11 @@ xTaskCreate(stratum_primary_heartbeat, ...);  // Internal RAM
 
 1. **Condicional explícito** (RECOMENDADO):
 ```c
+bool psram_available = esp_psram_is_initialized();
 uint32_t mem_caps = psram_available ? MALLOC_CAP_SPIRAM : MALLOC_CAP_INTERNAL;
 xTaskCreateWithCaps(task, ..., mem_caps);
+// o
+buffer = heap_caps_malloc(size, mem_caps);
 ```
 
 2. **Usar `xTaskCreate()` estándar** (para tasks no críticos de memoria):
@@ -516,6 +540,8 @@ xTaskCreate(task, ...);  // Usa internal RAM por defecto
 ```
 
 3. **Para LVGL**: No usar custom pool, dejar que use `malloc()` estándar
+
+4. **⚠️ NUNCA usar**: `heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_INTERNAL)` - NO funciona
 
 ---
 
