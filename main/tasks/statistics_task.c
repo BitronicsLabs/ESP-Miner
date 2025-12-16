@@ -23,7 +23,8 @@ static uint16_t statisticsDataStart;
 static uint16_t statisticsDataSize;
 static pthread_mutex_t statisticsDataLock = PTHREAD_MUTEX_INITIALIZER;
 
-static const uint16_t maxDataCount = 720;
+// Buffer size: 720 entries with PSRAM (~1 hour), 90 entries without PSRAM (~7.5 minutes)
+static uint16_t maxDataCount = 0;
 
 void createStatisticsBuffer()
 {
@@ -36,12 +37,19 @@ void createStatisticsBuffer()
             bool psram_available = esp_psram_is_initialized();
             uint32_t mem_caps = psram_available ? MALLOC_CAP_SPIRAM : MALLOC_CAP_INTERNAL;
 
+            // Adjust buffer size based on available memory
+            // With PSRAM: 720 entries × 52 bytes = 37,440 bytes (~1 hour of history at 5s intervals)
+            // Without PSRAM: 90 entries × 52 bytes = 4,680 bytes (~7.5 minutes of history)
+            maxDataCount = psram_available ? 720 : 90;
+
             statisticsBuffer = (StatisticsDataPtr)heap_caps_malloc(sizeof(struct StatisticsData) * maxDataCount, mem_caps);
             if (NULL == statisticsBuffer) {
-                ESP_LOGE(TAG, "Failed to allocate statistics buffer (%d bytes)!", sizeof(struct StatisticsData) * maxDataCount);
+                ESP_LOGE(TAG, "Failed to allocate statistics buffer (%d bytes, %d entries)!",
+                    sizeof(struct StatisticsData) * maxDataCount, maxDataCount);
             } else {
-                ESP_LOGI(TAG, "Statistics buffer allocated (%d bytes, using %s)",
+                ESP_LOGI(TAG, "Statistics buffer allocated (%d bytes, %d entries, using %s)",
                     sizeof(struct StatisticsData) * maxDataCount,
+                    maxDataCount,
                     psram_available ? "PSRAM" : "internal RAM");
             }
         }

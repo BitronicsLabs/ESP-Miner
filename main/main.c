@@ -127,14 +127,13 @@ void app_main(void)
         ESP_LOGE(TAG, "Error creating hashrate monitor task");
     }
 
-    // Statistics task ONLY on devices WITH PSRAM (37KB buffer too large for low memory mode)
-    if (GLOBAL_STATE.psram_is_available) {
-        if (xTaskCreateWithCaps(statistics_task, "statistics", 8192, (void *) &GLOBAL_STATE, 3, NULL, MALLOC_CAP_SPIRAM) != pdPASS) {
-            ESP_LOGE(TAG, "Error creating statistics task");
-        } else {
-            ESP_LOGI(TAG, "Statistics task enabled (using PSRAM)");
-        }
+    // Statistics task - uses reduced buffer size on devices without PSRAM
+    // With PSRAM: 720 entries (37KB, ~1 hour history)
+    // Without PSRAM: 90 entries (4.6KB, ~7.5 minutes history)
+    if (xTaskCreateWithCaps(statistics_task, "statistics", 8192, (void *) &GLOBAL_STATE, 3, NULL, task_mem_caps) != pdPASS) {
+        ESP_LOGE(TAG, "Error creating statistics task");
     } else {
-        ESP_LOGW(TAG, "Statistics disabled - insufficient RAM (requires 37KB, needed for HTTP server buffers)");
+        ESP_LOGI(TAG, "Statistics task enabled (%s)",
+            GLOBAL_STATE.psram_is_available ? "720 entries / 1hr history" : "90 entries / 7.5min history");
     }
 }
