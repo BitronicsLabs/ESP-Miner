@@ -439,6 +439,22 @@ xTaskCreate(...);  // Usa internal RAM por defecto
 xTaskCreate(stratum_primary_heartbeat, ...);  // Internal RAM
 ```
 
+#### 8. WiFi/LWIP SPIRAM Allocation - 🔥 MUY CRÍTICO (Web UI)
+**Problema**: `CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y` en sdkconfig.defaults
+- Intenta allocar WiFi y TCP/IP buffers en SPIRAM
+- Sin PSRAM: "wifi:packet allocation failed" errors
+- **Web UI no funciona** - HTTP server no puede servir requests
+- Captive portal no responde después de configurar WiFi
+
+**Solución** (commit `2c87e9a`):
+```bash
+# sdkconfig.defaults
+# CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP is not set
+```
+- WiFi/LWIP usa internal RAM exclusivamente
+- Web UI funciona perfectamente
+- HTTP requests se procesan correctamente
+
 ### Matriz Completa de Usos SPIRAM
 
 | Archivo | Uso | Crítico? | Status |
@@ -452,6 +468,7 @@ xTaskCreate(stratum_primary_heartbeat, ...);  // Internal RAM
 | `websocket.c` | Log queue | ✅ Habilitado | ✅ Arreglado (commit 143e508) |
 | `http_server.c` | WS task | ✅ Habilitado | ✅ Condicional (commit 143e508) |
 | `statistics_task.c` | Stats buffer | ✅ Habilitado | ✅ Fallback (commit 143e508) |
+| `sdkconfig.defaults` | WiFi/LWIP bufs | 🔥 MUY CRÍTICO | ✅ Arreglado (commit 2c87e9a) |
 | `bap*.c` | BAP module | ❌ No crítico | ✅ Completamente deshabilitado |
 
 ### Commits de la Auditoría y Fixes
@@ -464,6 +481,8 @@ xTaskCreate(stratum_primary_heartbeat, ...);  // Internal RAM
 6. **`7971718`** - Add error checking for DNS server task creation
 7. **`7d033e9`** - Fix DNS server task creation - use xTaskCreate instead
 8. **`93213e0`** - Fix stratum heartbeat task creation
+9. **`eeecb76`** - Update LOW_MEMORY_MODE_PATCH.md with all fixes and lessons learned
+10. **`2c87e9a`** - 🔥 **CRÍTICO**: Disable WiFi/LWIP SPIRAM allocation to fix web UI
 
 ---
 
