@@ -172,7 +172,8 @@ static esp_err_t GET_wifi_scan(httpd_req_t *req)
 #define FILE_PATH_MAX (ESP_VFS_PATH_MAX + 128)
 #define SCRATCH_BUFSIZE (10240)
 #define SCRATCH_BUFSIZE_LOW_MEM (4096)  // 4KB for low memory mode
-#define MESSAGE_QUEUE_SIZE (128)
+// Reduced from 128 to 32 for low memory mode - saves ~12KB of RAM
+#define MESSAGE_QUEUE_SIZE (32)
 
 typedef struct rest_server_context
 {

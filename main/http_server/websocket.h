@@ -3,7 +3,8 @@
 
 #include "esp_err.h"
 
-#define MESSAGE_QUEUE_SIZE (128)
+// Reduced from 128 to 32 for low memory mode - saves ~12KB of RAM
+#define MESSAGE_QUEUE_SIZE (32)
 #define MAX_WEBSOCKET_CLIENTS (10)
 
 esp_err_t websocket_handler(httpd_req_t * req);

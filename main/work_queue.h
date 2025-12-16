@@ -4,7 +4,8 @@
 #include <pthread.h>
 #include "mining.h"
 
-#define QUEUE_SIZE 12
+// Reduced from 12 to 8 for low memory mode - reduces heap fragmentation
+#define QUEUE_SIZE 8
 
 typedef struct
 {
