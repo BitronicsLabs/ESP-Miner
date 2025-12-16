@@ -13,7 +13,8 @@ CONFIG_SPIRAM=y
 # Allow boot without PSRAM - don't force OCT mode
 # CONFIG_SPIRAM_MODE_OCT is not set
 CONFIG_SPIRAM_SPEED_80M=y
-CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+# WiFi/LWIP allocation in SPIRAM causes packet allocation failures without PSRAM
+# CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP is not set
 # Don't allow BSS in external memory (causes crash if no PSRAM)
 # CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY is not set
 CONFIG_SPIRAM_IGNORE_NOTFOUND=y
