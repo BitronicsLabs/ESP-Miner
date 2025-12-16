@@ -171,7 +171,7 @@ static esp_err_t GET_wifi_scan(httpd_req_t *req)
 
 #define FILE_PATH_MAX (ESP_VFS_PATH_MAX + 128)
 #define SCRATCH_BUFSIZE (10240)
-#define SCRATCH_BUFSIZE_LOW_MEM (6144)  // 6KB for low memory mode
+#define SCRATCH_BUFSIZE_LOW_MEM (4096)  // 4KB for low memory mode
 #define MESSAGE_QUEUE_SIZE (128)
 
 typedef struct rest_server_context
@@ -180,7 +180,7 @@ typedef struct rest_server_context
     char scratch[SCRATCH_BUFSIZE];
 } rest_server_context_t;
 
-// Low memory variant with smaller scratch buffer
+// Low memory variant with smaller scratch buffer (4KB instead of 10KB)
 typedef struct rest_server_context_low_mem
 {
     char base_path[ESP_VFS_PATH_MAX + 1];
@@ -1210,10 +1210,10 @@ esp_err_t start_rest_server(void * pvParameters)
     rest_server_context_t * rest_context;
     if (!GLOBAL_STATE->psram_is_available) {
         rest_context = calloc(1, sizeof(rest_server_context_low_mem_t));
-        ESP_LOGI(TAG, "Using low memory HTTP context (6KB scratch buffer)");
+        ESP_LOGI(TAG, "Low memory HTTP: 3 sockets, 4KB stack, 4KB scratch buffer");
     } else {
         rest_context = calloc(1, sizeof(rest_server_context_t));
-        ESP_LOGI(TAG, "Using normal HTTP context (10KB scratch buffer)");
+        ESP_LOGI(TAG, "Normal HTTP: 20 sockets, 8KB stack, 10KB scratch buffer");
     }
     REST_CHECK(rest_context, "No memory for rest context", err);
     strlcpy(rest_context->base_path, base_path, sizeof(rest_context->base_path));
@@ -1224,8 +1224,9 @@ esp_err_t start_rest_server(void * pvParameters)
 
     // Low memory mode: reduce max concurrent connections
     if (!GLOBAL_STATE->psram_is_available) {
-        config.max_open_sockets = 5;  // Reduce from 20 (each socket uses significant RAM)
-        ESP_LOGW(TAG, "HTTP server low memory mode: max 5 concurrent connections");
+        config.max_open_sockets = 3;  // Reduce from 20 (each socket uses significant RAM)
+        config.stack_size = 4096;     // Reduce stack from 8192 per connection
+        ESP_LOGW(TAG, "HTTP server low memory mode: max 3 connections, 4KB stack");
     } else {
         config.max_open_sockets = 20;
     }
