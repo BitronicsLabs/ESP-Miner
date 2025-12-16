@@ -1197,14 +1197,31 @@ esp_err_t start_rest_server(void * pvParameters)
     }
 
     REST_CHECK(base_path, "wrong base path", err);
-    rest_server_context_t * rest_context = calloc(1, sizeof(rest_server_context_t));
+
+    // Use smaller context struct in low memory mode
+    rest_server_context_t * rest_context;
+    if (!GLOBAL_STATE->psram_is_available) {
+        rest_context = calloc(1, sizeof(rest_server_context_low_mem_t));
+        ESP_LOGI(TAG, "Using low memory HTTP context (6KB scratch buffer)");
+    } else {
+        rest_context = calloc(1, sizeof(rest_server_context_t));
+        ESP_LOGI(TAG, "Using normal HTTP context (10KB scratch buffer)");
+    }
     REST_CHECK(rest_context, "No memory for rest context", err);
     strlcpy(rest_context->base_path, base_path, sizeof(rest_context->base_path));
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.stack_size = 8192;
-    config.max_open_sockets = 20;
+
+    // Low memory mode: reduce max concurrent connections
+    if (!GLOBAL_STATE->psram_is_available) {
+        config.max_open_sockets = 5;  // Reduce from 20 (each socket uses significant RAM)
+        ESP_LOGW(TAG, "HTTP server low memory mode: max 5 concurrent connections");
+    } else {
+        config.max_open_sockets = 20;
+    }
+
     config.max_uri_handlers = 20;
     config.close_fn = websocket_close_fn;
     config.lru_purge_enable = true;
