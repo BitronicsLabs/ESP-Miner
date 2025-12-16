@@ -33,4 +33,8 @@ esp_err_t display_init(void * pvParameters);
 esp_err_t display_on(bool display_on);
 const DisplayConfig * get_display_config(const char * name);
 
+// Simple display functions for low memory mode (no LVGL)
+bool display_is_simple_mode(void);
+void display_simple_show_text(const char *line1, const char *line2, const char *line3, const char *line4);
+
 #endif /* DISPLAY_H_ */

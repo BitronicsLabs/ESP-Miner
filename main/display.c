@@ -18,6 +18,7 @@
 #include "driver/i2c_types.h"
 #include "esp_lcd_panel_ssd1306.h"
 #include "esp_lcd_sh1107.h"
+#include "display_simple.h"
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
@@ -31,6 +32,10 @@ static const char * LVGL_TAG = "lvgl";
 
 static esp_lcd_panel_handle_t panel_handle = NULL;
 static bool display_state_on = false;
+
+// Simple display for low memory mode (no LVGL)
+static simple_display_t simple_display = {0};
+static bool use_simple_display = false;
 
 static lv_theme_t theme;
 static lv_style_t scr_style;
@@ -176,6 +181,34 @@ esp_err_t display_init(void * pvParameters)
         }
     }
 
+    // LOW MEMORY MODE: Skip LVGL and use simple framebuffer display
+    if (!GLOBAL_STATE->psram_is_available) {
+        ESP_LOGW(TAG, "Low memory mode: Using simple display (no LVGL) - saves ~70KB RAM");
+
+        use_simple_display = true;
+        esp_err_t ret = simple_display_init(&simple_display, panel_handle,
+                                            GLOBAL_STATE->DISPLAY_CONFIG.h_res,
+                                            GLOBAL_STATE->DISPLAY_CONFIG.v_res);
+
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to initialize simple display");
+            return ret;
+        }
+
+        // Display startup message
+        simple_display_clear(&simple_display);
+        simple_display_draw_text(&simple_display, "BITAXE", 35, 10);
+        simple_display_draw_text(&simple_display, "LOW MEMORY MODE", 10, 28);
+        simple_display_update(&simple_display);
+
+        // Turn on display
+        ESP_RETURN_ON_ERROR(display_on(true), TAG, "Display on failed");
+        GLOBAL_STATE->SYSTEM_MODULE.is_screen_active = true;
+
+        ESP_LOGI(TAG, "Simple display init success (1KB framebuffer)!");
+        return ESP_OK;
+    }
+
     ESP_LOGI(TAG, "Initialize LVGL");
 
     ESP_RETURN_ON_ERROR(lvgl_port_init(&lvgl_cfg), TAG, "LVGL init failed");
@@ -273,4 +306,36 @@ const DisplayConfig * get_display_config(const char * name)
         }
     }
     return NULL;
+}
+
+bool display_is_simple_mode(void)
+{
+    return use_simple_display;
+}
+
+void display_simple_show_text(const char *line1, const char *line2, const char *line3, const char *line4)
+{
+    if (!use_simple_display || !simple_display.initialized) {
+        return;
+    }
+
+    // Clear display
+    simple_display_clear(&simple_display);
+
+    // Draw up to 4 lines of text (8 pixels per line)
+    if (line1) {
+        simple_display_draw_text(&simple_display, line1, 0, 0);
+    }
+    if (line2) {
+        simple_display_draw_text(&simple_display, line2, 0, 8);
+    }
+    if (line3) {
+        simple_display_draw_text(&simple_display, line3, 0, 16);
+    }
+    if (line4) {
+        simple_display_draw_text(&simple_display, line4, 0, 24);
+    }
+
+    // Update display
+    simple_display_update(&simple_display);
 }

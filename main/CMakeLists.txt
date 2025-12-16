@@ -5,6 +5,7 @@ SRCS
     "main.c"
     "nvs_config.c"
     "display.c"
+    "display_simple.c"
     "screen.c"
     "input.c"
     "system.c"
