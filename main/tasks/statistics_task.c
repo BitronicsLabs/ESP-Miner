@@ -30,15 +30,18 @@ void createStatisticsBuffer()
         pthread_mutex_lock(&statisticsDataLock);
 
         if (NULL == statisticsBuffer) {
-            // Try SPIRAM first, fallback to internal RAM (low memory mode)
-            statisticsBuffer = (StatisticsDataPtr)heap_caps_malloc(sizeof(struct StatisticsData) * maxDataCount, MALLOC_CAP_SPIRAM | MALLOC_CAP_INTERNAL);
+            // CRITICAL: MALLOC_CAP_SPIRAM | MALLOC_CAP_INTERNAL does NOT work as expected
+            // Must use conditional selection instead
+            bool psram_available = esp_psram_is_initialized();
+            uint32_t mem_caps = psram_available ? MALLOC_CAP_SPIRAM : MALLOC_CAP_INTERNAL;
+
+            statisticsBuffer = (StatisticsDataPtr)heap_caps_malloc(sizeof(struct StatisticsData) * maxDataCount, mem_caps);
             if (NULL == statisticsBuffer) {
-                ESP_LOGE(TAG, "Failed to allocate statistics buffer!");
+                ESP_LOGE(TAG, "Failed to allocate statistics buffer (%d bytes)!", sizeof(struct StatisticsData) * maxDataCount);
             } else {
-                // Check which memory type was used
-                if (heap_caps_get_allocated_size(statisticsBuffer) && !esp_ptr_external_ram(statisticsBuffer)) {
-                    ESP_LOGW(TAG, "Statistics buffer using internal RAM (low memory mode)");
-                }
+                ESP_LOGI(TAG, "Statistics buffer allocated (%d bytes, using %s)",
+                    sizeof(struct StatisticsData) * maxDataCount,
+                    psram_available ? "PSRAM" : "internal RAM");
             }
         }
 
