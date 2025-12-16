@@ -127,10 +127,14 @@ void app_main(void)
         ESP_LOGE(TAG, "Error creating hashrate monitor task");
     }
 
-    // Create statistics task - use appropriate memory (enables AxeOS graphs)
-    if (xTaskCreateWithCaps(statistics_task, "statistics", 8192, (void *) &GLOBAL_STATE, 3, NULL, task_mem_caps) != pdPASS) {
-        ESP_LOGE(TAG, "Error creating statistics task");
+    // Statistics task ONLY on devices WITH PSRAM (37KB buffer too large for low memory mode)
+    if (GLOBAL_STATE.psram_is_available) {
+        if (xTaskCreateWithCaps(statistics_task, "statistics", 8192, (void *) &GLOBAL_STATE, 3, NULL, MALLOC_CAP_SPIRAM) != pdPASS) {
+            ESP_LOGE(TAG, "Error creating statistics task");
+        } else {
+            ESP_LOGI(TAG, "Statistics task enabled (using PSRAM)");
+        }
     } else {
-        ESP_LOGI(TAG, "Statistics task enabled (using %s)", GLOBAL_STATE.psram_is_available ? "PSRAM" : "internal RAM");
+        ESP_LOGW(TAG, "Statistics disabled - insufficient RAM (requires 37KB, needed for HTTP server buffers)");
     }
 }
