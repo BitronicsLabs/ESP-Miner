@@ -347,11 +347,11 @@ Si main.c cambia en upstream, resolver manualmente manteniendo:
 
 ---
 
-## Auditoría Completa de SPIRAM (2025-12-15)
+## Auditoría Completa de SPIRAM (2025-12-15/16)
 
 ### Problemas Adicionales Encontrados y Corregidos
 
-Después de la implementación inicial, se realizó una auditoría exhaustiva de TODOS los usos de `MALLOC_CAP_SPIRAM` en el codebase. Se encontraron **3 problemas críticos adicionales** que causarían crashes:
+Después de la implementación inicial, se realizó una auditoría exhaustiva de TODOS los usos de `MALLOC_CAP_SPIRAM` en el codebase. Se encontraron **múltiples problemas críticos** que causarían crashes o mal funcionamiento:
 
 #### 1. LVGL Memory Pool (lv_conf.h) - 🔥 MUY CRÍTICO
 **Problema**:
@@ -393,7 +393,7 @@ xTaskCreateWithCaps(stratum_primary_heartbeat, ..., MALLOC_CAP_SPIRAM);
 xTaskCreateWithCaps(..., MALLOC_CAP_SPIRAM | MALLOC_CAP_INTERNAL);
 ```
 
-#### 4. Hashrate Monitor Task - 🔥 CRÍTICO (ya corregido)
+#### 4. Hashrate Monitor Task - 🔥 CRÍTICO
 **Problema**: Task completamente deshabilitado sin PSRAM
 - Display no se actualizaba (`current_hashrate` nunca se seteaba)
 - Pantalla congelada mostrando "Gh/s: --"
@@ -402,6 +402,43 @@ xTaskCreateWithCaps(..., MALLOC_CAP_SPIRAM | MALLOC_CAP_INTERNAL);
 - Task SIEMPRE se crea, pero usa RAM interna cuando no hay PSRAM
 - Display funciona perfectamente en low memory mode
 
+#### 5. LVGL Memory Allocation - 🔥 MUY CRÍTICO
+**Problema**: Macro `LV_MEM_POOL_ALLOC` con `MALLOC_CAP_SPIRAM | MALLOC_CAP_INTERNAL`
+- No funciona como esperado - no hace fallback automático
+- Causa Guru Meditation Error (StoreProhibited) durante display_init
+- LVGL no maneja bien errores de allocación en init
+
+**Solución** (commit `97ab3cd`):
+```c
+// Removido: #define LV_MEM_POOL_ALLOC(size) heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)
+// Ahora usa malloc() estándar que automáticamente usa memoria disponible
+```
+
+#### 6. DNS Server Task - 🔥 CRÍTICO (Captive Portal)
+**Problema**: `xTaskCreateWithCaps` con ambos flags `MALLOC_CAP_SPIRAM | MALLOC_CAP_INTERNAL`
+- Falla silenciosamente en dispositivos sin PSRAM
+- Task nunca se crea
+- Captive portal no funciona (no aparece al conectarse al WiFi AP)
+- No se podía configurar el dispositivo
+
+**Solución** (commits `7971718`, `7d033e9`):
+```c
+// Cambio de:
+xTaskCreateWithCaps(..., MALLOC_CAP_SPIRAM | MALLOC_CAP_INTERNAL);
+// A:
+xTaskCreate(...);  // Usa internal RAM por defecto
+```
+
+#### 7. Stratum Heartbeat Task - 🔥 CRÍTICO
+**Problema**: Mismo issue que DNS server
+- `xTaskCreateWithCaps` con ambos flags falla silenciosamente
+- Task no se crea, puede causar problemas de conexión al pool
+
+**Solución** (commit `93213e0`):
+```c
+xTaskCreate(stratum_primary_heartbeat, ...);  // Internal RAM
+```
+
 ### Matriz Completa de Usos SPIRAM
 
 | Archivo | Uso | Crítico? | Status |
@@ -409,23 +446,61 @@ xTaskCreateWithCaps(..., MALLOC_CAP_SPIRAM | MALLOC_CAP_INTERNAL);
 | `asic_task.c` | Job buffers | ✅ Sí | ✅ Arreglado (commit 4daaa2e) |
 | `display.c` | LVGL task stack | ✅ Sí | ✅ Arreglado (commit 4daaa2e) |
 | `hashrate_monitor_task.c` | Measurements | ✅ Sí | ✅ Arreglado (commit 9692acd) |
-| `lv_conf.h` | LVGL pool | 🔥 MUY CRÍTICO | ✅ Arreglado (commit ce28c10) |
-| `dns_server.c` | DNS task | 🔥 CRÍTICO | ✅ Arreglado (commit ce28c10) |
-| `stratum_task.c` | Heartbeat | 🔥 CRÍTICO | ✅ Arreglado (commit ce28c10) |
-| `websocket.c` | Log queue | ⚠️ Medio | ✅ Task deshabilitado |
-| `http_server.c` | WS task | ❌ No crítico | ✅ Task condicional |
+| `lv_conf.h` | LVGL pool | 🔥 MUY CRÍTICO | ✅ Arreglado (commit 97ab3cd) |
+| `dns_server.c` | DNS task | 🔥 CRÍTICO | ✅ Arreglado (commits 7971718, 7d033e9) |
+| `stratum_task.c` | Heartbeat | 🔥 CRÍTICO | ✅ Arreglado (commit 93213e0) |
+| `websocket.c` | Log queue | ✅ Habilitado | ✅ Arreglado (commit 143e508) |
+| `http_server.c` | WS task | ✅ Habilitado | ✅ Condicional (commit 143e508) |
+| `statistics_task.c` | Stats buffer | ✅ Habilitado | ✅ Fallback (commit 143e508) |
 | `bap*.c` | BAP module | ❌ No crítico | ✅ Completamente deshabilitado |
-| `statistics_task.c` | Stats buffer | ❌ No crítico | ✅ Task deshabilitado |
 
-### Commits de la Auditoría
+### Commits de la Auditoría y Fixes
 
 1. **`9692acd`** - Fix display not working in low memory mode
 2. **`ce28c10`** - Fix remaining critical SPIRAM allocations
 3. **`1c67a05`** - Update documentation with complete SPIRAM audit results
-4. **`f8a7b2d`** - Enable statistics and websocket with internal RAM fallback (PRÓXIMO)
+4. **`143e508`** - Enable statistics and websocket with internal RAM fallback
+5. **`97ab3cd`** - Fix LVGL crash - use standard malloc() instead of custom pool
+6. **`7971718`** - Add error checking for DNS server task creation
+7. **`7d033e9`** - Fix DNS server task creation - use xTaskCreate instead
+8. **`93213e0`** - Fix stratum heartbeat task creation
+
+---
+
+## Lecciones Aprendidas
+
+### ⚠️ `MALLOC_CAP_SPIRAM | MALLOC_CAP_INTERNAL` NO funciona como esperado
+
+**Problema descubierto**: Combinar ambos flags en `xTaskCreateWithCaps` o `heap_caps_malloc` **NO hace fallback automático** en dispositivos sin PSRAM. El comportamiento es:
+
+1. **`heap_caps_malloc(size, SPIRAM | INTERNAL)`**:
+   - Intenta SPIRAM primero
+   - Si falla, **NO intenta INTERNAL automáticamente**
+   - Retorna NULL
+
+2. **`xTaskCreateWithCaps(task, ..., SPIRAM | INTERNAL)`**:
+   - Similar comportamiento
+   - **Falla silenciosamente** en dispositivos sin PSRAM
+   - Task nunca se crea
+
+### ✅ Soluciones que SÍ funcionan
+
+1. **Condicional explícito** (RECOMENDADO):
+```c
+uint32_t mem_caps = psram_available ? MALLOC_CAP_SPIRAM : MALLOC_CAP_INTERNAL;
+xTaskCreateWithCaps(task, ..., mem_caps);
+```
+
+2. **Usar `xTaskCreate()` estándar** (para tasks no críticos de memoria):
+```c
+xTaskCreate(task, ...);  // Usa internal RAM por defecto
+```
+
+3. **Para LVGL**: No usar custom pool, dejar que use `malloc()` estándar
 
 ---
 
 **Status**: ✅ COMPLETAMENTE ARREGLADO Y TESTEADO
-**Riesgo**: Muy bajo (auditoría completa realizada)
+**Riesgo**: Muy bajo (auditoría completa + testing real en hardware)
 **Prioridad**: Crítica (múltiples crash scenarios prevenidos)
+**Testing**: Validado en hardware sin PSRAM - captive portal, display, mining funcionando
